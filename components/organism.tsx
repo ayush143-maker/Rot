@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Cracks } from "./cracks";
 import { Ecg } from "./ecg";
+import { Shards } from "./shards";
 import { Shatter } from "./shatter";
 import { Tombstone } from "./tombstone";
 import { Vitals } from "./vitals";
@@ -76,6 +77,7 @@ const STAGE_ANNOUNCE: Record<Stage, string> = {
 type DeadInfo = { born: number; died: number; cod: string };
 
 const CRITICAL_DECAY = 0.85;
+const DYING_MS = 7000; // length of the death choreography
 
 function applyDecay(d: number) {
   if (typeof document === "undefined") return;
@@ -83,12 +85,11 @@ function applyDecay(d: number) {
   const el = document.documentElement;
   el.style.setProperty("--decay", String(clamped));
   el.dataset.stage = stageOf(clamped);
-  el.dataset.critical = clamped >= CRITICAL_DECAY && clamped < 1 ? "true" : "false";
+  el.dataset.critical =
+    clamped >= CRITICAL_DECAY && clamped < 1 ? "true" : "false";
 }
 
 /* ---- words that die ---------------------------------------------- */
-/* every word gets a deterministic death threshold. as decay rises, more
-   words pass their threshold and go out — and they never come back. */
 
 function wordThreshold(word: string, index: number): number {
   let h = 2166136261;
@@ -127,10 +128,11 @@ export default function Organism() {
   const [counts, setCounts] = useState({ deaths: 0, res: 0 });
   const [marks, setMarks] = useState<string[]>([]);
   const [flash, setFlash] = useState(false);
-  const [struck, setStruck] = useState(false);
+  const [dying, setDying] = useState(false);
   const [announce, setAnnounce] = useState("");
 
   const marksRef = useRef<string[]>([]);
+  const dyingTimer = useRef<number | null>(null);
   const rot = useRef({
     birth: 0,
     lastTick: 0,
@@ -164,7 +166,7 @@ export default function Organism() {
 
     const life = now - birth;
     if (life >= LIFE_SPAN_MS) {
-      // it died while no one was watching.
+      // it died while no one was watching. no ceremony — just the grave.
       let cod = readStr(KEYS.cod);
       let deaths = storedDeaths;
       if (!cod) {
@@ -209,7 +211,6 @@ export default function Organism() {
       const idle = now - r.lastInteraction > IDLE_AFTER_MS;
       const scale = idle ? NEGLECT_ACCEL : 1;
 
-      // neglect ages the organism by dragging its birth further into the past.
       if (scale > 1) {
         r.birth -= (scale - 1) * dt;
         writeInt(KEYS.birth, r.birth);
@@ -219,6 +220,8 @@ export default function Organism() {
       if (!idle) r.attended += dt;
 
       if (life >= LIFE_SPAN_MS) {
+        // ---- death. the record is written immediately; the body takes
+        // its time. -------------------------------------------------
         const diedAt = r.birth + LIFE_SPAN_MS;
         const idleShare = life > 0 ? 1 - r.attended / life : 0;
         const cod = idleShare > 0.5 ? "neglect" : "old age";
@@ -227,16 +230,25 @@ export default function Organism() {
         const deaths = readInt(KEYS.deaths, 0) + 1;
         writeInt(KEYS.deaths, deaths);
         writeStr(KEYS.cod, cod);
+
         applyDecay(1);
+        // override "dead" with "dying": the choreography plays first.
+        document.documentElement.dataset.stage = "dying";
+
         setCounts((c) => ({ ...c, deaths }));
         setDead({ born: r.birth, died: diedAt, cod });
-        setPhase("dead");
-        setStruck(true); // the death event: blink, convulsion, shatter.
         setAgeSec(LIFE_SPAN_MS / 1000);
         setPulse(0);
         setVitals(0);
         setTimeScale(1);
-        setAnnounce(`dead. cause of death: ${cod}.`);
+        setDying(true);
+        setAnnounce("the site is dying.");
+
+        dyingTimer.current = window.setTimeout(() => {
+          setDying(false);
+          setPhase("dead");
+          setAnnounce(`dead. cause of death: ${cod}.`);
+        }, DYING_MS);
         return;
       }
 
@@ -285,14 +297,19 @@ export default function Organism() {
 
     return () => {
       window.clearInterval(id);
+      if (dyingTimer.current !== null) window.clearTimeout(dyingTimer.current);
       events.forEach((e) => window.removeEventListener(e, onInteract));
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, []);
 
   useEffect(() => {
-    document.title = phase === "dead" ? "rot — dead" : `rot — ${phase}`;
-  }, [phase]);
+    document.title = dying
+      ? "rot — dying"
+      : phase === "dead"
+        ? "rot — dead"
+        : `rot — ${phase}`;
+  }, [phase, dying]);
 
   const defibrillate = useCallback(() => {
     const r = rot.current;
@@ -309,9 +326,14 @@ export default function Organism() {
     const res = readInt(KEYS.resurrections, 0) + 1;
     writeInt(KEYS.resurrections, res);
 
+    if (dyingTimer.current !== null) {
+      window.clearTimeout(dyingTimer.current);
+      dyingTimer.current = null;
+    }
+
     setCounts((c) => ({ ...c, res }));
     setDead(null);
-    setStruck(false);
+    setDying(false);
     setBornAt(now);
     setPhase("alive");
     setAgeSec(0);
@@ -341,12 +363,13 @@ export default function Organism() {
         ageSec={ageSec}
         pulse={pulse}
         vitals={vitals}
-        stage={phase}
+        stage={dying ? "dead" : phase}
         timeScale={timeScale}
       />
       <Cracks />
-      {phase === "dead" && <Shatter />}
-      {struck && (
+      {dying && <Shatter />}
+      {dying && <Shards />}
+      {dying && (
         <div className="death-blink" aria-hidden="true">
           <span>signal lost</span>
         </div>
@@ -357,7 +380,7 @@ export default function Organism() {
         {announce}
       </p>
 
-      <main className={struck ? "main-struck" : undefined}>
+      <main>
         <header className="masthead">
           <h1 className="wordmark">
             rot<span className="wordmark-dot">.</span>
