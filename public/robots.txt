@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+# everything here dies in 150 seconds anyway.
