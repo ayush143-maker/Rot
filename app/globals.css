@@ -2,6 +2,8 @@
    ROT — the website that lives and dies
    the entire palette, tempo and posture of the page is driven
    by a single number: --decay (0 → 1), written to <html> by js.
+   death itself is a stage: html[data-stage="dying"] plays the
+   collapse, the shatter and the withering before the grave.
    ============================================================ */
 
 /* ---------- reset ---------- */
@@ -40,7 +42,6 @@ input {
 :root {
   --decay: 0;
 
-  /* raw palette */
   --bone: #f5efe2;
   --ink: #171310;
   --moss: #234431;
@@ -49,20 +50,17 @@ input {
   --rust: #8a3b22;
   --void: #0a0908;
 
-  /* aged variants (~40% less saturation, bone yellowed) */
   --aging-bone: #eae0c8;
   --aging-ink: #4a4034;
   --aging-moss: #5f6353;
   --aging-verm: #bc6a45;
   --aging-honey: #b08f52;
 
-  /* ash variants */
   --ash: #8b8578;
   --ash-ink: #262219;
   --ash-moss: #4c4a40;
   --ash-honey: #7a7466;
 
-  /* fallbacks for browsers without color-mix: stay alive forever */
   --bg: #f5efe2;
   --ink-cur: #171310;
   --accent-cur: #e4572e;
@@ -75,10 +73,9 @@ input {
 
 @supports (color: color-mix(in oklab, red, blue)) {
   :root {
-    /* phase weights derived from decay */
-    --p1: clamp(0, calc(var(--decay) / 0.45), 1); /* alive → aging  */
-    --p2: clamp(0, calc((var(--decay) - 0.5) / 0.35), 1); /* aging → ash */
-    --p3: clamp(0, calc((var(--decay) - 0.86) / 0.14), 1); /* ash → void  */
+    --p1: clamp(0, calc(var(--decay) / 0.45), 1);
+    --p2: clamp(0, calc((var(--decay) - 0.5) / 0.35), 1);
+    --p3: clamp(0, calc((var(--decay) - 0.86) / 0.14), 1);
 
     --b1: color-mix(in oklab, var(--aging-bone) calc(var(--p1) * 100%), var(--bone));
     --b2: color-mix(in oklab, var(--ash) calc(var(--p2) * 100%), var(--b1));
@@ -100,8 +97,6 @@ input {
   }
 }
 
-/* dead overrides: the void. bone text at 40%, vermilion reserved
-   exclusively for the defibrillate button. */
 html[data-stage="dead"] {
   color-scheme: dark;
   --bg: #0a0908;
@@ -110,6 +105,17 @@ html[data-stage="dead"] {
   --moss-cur: rgba(245, 239, 226, 0.35);
   --honey-cur: rgba(245, 239, 226, 0.25);
   --line: rgba(245, 239, 226, 0.16);
+}
+
+/* dying: the body is already in the void, but its outline is still legible. */
+html[data-stage="dying"] {
+  color-scheme: dark;
+  --bg: #0a0908;
+  --ink-cur: rgba(245, 239, 226, 0.55);
+  --accent-cur: rgba(245, 239, 226, 0.45);
+  --moss-cur: rgba(245, 239, 226, 0.4);
+  --honey-cur: rgba(245, 239, 226, 0.3);
+  --line: rgba(245, 239, 226, 0.18);
 }
 
 /* ---------- base ---------- */
@@ -220,17 +226,18 @@ html[data-stage="decay"] .ecg-live {
   animation: sweep-stutter 3.6s linear infinite;
 }
 
-/* the final seconds: the heart races and misses. */
 html[data-stage="decay"][data-critical="true"] .ecg-live {
   animation: sweep-stutter 1.7s linear infinite;
   opacity: 0.7;
 }
 
+html[data-stage="dying"] .ecg-live,
 html[data-stage="dead"] .ecg-live {
   opacity: 0;
   animation: none;
 }
 
+html[data-stage="dying"] .ecg-flat,
 html[data-stage="dead"] .ecg-flat {
   opacity: 0.5;
   animation: flatline-blink 5.5s ease-in-out infinite;
@@ -344,7 +351,6 @@ html[data-stage="dead"] .ecg-flat {
   color: var(--accent-cur);
 }
 
-/* the instruments start failing during decay. */
 html[data-stage="decay"] .hud {
   animation: hud-flicker 4s steps(1) infinite;
 }
@@ -377,9 +383,11 @@ main {
   padding: 128px clamp(20px, 5vw, 72px) 72px;
 }
 
-/* struck by death: one convulsion, then the page sags and stays fallen. */
-main.main-struck {
-  animation: death-throes 1.3s ease-out forwards;
+/* dying: one convulsion, then the whole body withers into the void. */
+html[data-stage="dying"] main {
+  animation:
+    death-throes 1.3s ease-out,
+    wither 6.9s linear forwards;
 }
 
 @keyframes death-throes {
@@ -415,6 +423,22 @@ main.main-struck {
   }
 }
 
+@keyframes wither {
+  0%,
+  45% {
+    opacity: 1;
+    filter: blur(0) grayscale(0);
+  }
+  75% {
+    opacity: 0.5;
+    filter: blur(2px) grayscale(0.6);
+  }
+  100% {
+    opacity: 0;
+    filter: blur(7px) grayscale(1);
+  }
+}
+
 /* ---------- masthead ---------- */
 
 .masthead {
@@ -440,8 +464,8 @@ main.main-struck {
   color: var(--accent-cur);
 }
 
-/* in the final seconds, the dot loses its grip and falls off the page. */
-html[data-stage="decay"][data-critical="true"] .wordmark-dot {
+html[data-stage="decay"][data-critical="true"] .wordmark-dot,
+html[data-stage="dying"] .wordmark-dot {
   animation: dot-fall 1.8s cubic-bezier(0.4, 0, 0.9, 0.6) forwards;
 }
 
@@ -497,7 +521,6 @@ html[data-stage="decay"][data-critical="true"] .wordmark-dot {
   opacity: 0.75;
 }
 
-/* breathing slows as decay rises; in decay and death it stops. */
 html[data-stage="alive"] .voice-line {
   animation: breathe 3.2s ease-in-out infinite;
 }
@@ -506,12 +529,10 @@ html[data-stage="aging"] .voice-line {
   animation: breathe 5.6s ease-in-out infinite;
 }
 
-/* decay: the voice flickers like a failing bulb. */
 html[data-stage="decay"] .voice-line {
   animation: voice-flicker 2.8s linear infinite;
 }
 
-/* critical: it starts losing signal entirely. */
 html[data-stage="decay"][data-critical="true"] .voice-line {
   animation: voice-glitch 1.6s steps(1) infinite;
 }
@@ -608,7 +629,6 @@ html[data-stage="decay"][data-critical="true"] .voice-line {
   transform-origin: 80% 10%;
 }
 
-/* decay: the body starts trembling. */
 html[data-stage="decay"] .report {
   animation: tremor 0.9s linear infinite;
 }
@@ -617,7 +637,6 @@ html[data-stage="decay"] .arrangement {
   animation: tremor 1.15s linear infinite reverse;
 }
 
-/* critical: trembling becomes shuddering. */
 html[data-stage="decay"][data-critical="true"] .columns {
   animation: shudder 0.5s linear infinite;
 }
@@ -733,7 +752,6 @@ html[data-stage="decay"][data-critical="true"] .frag p {
   font-variant-numeric: tabular-nums;
 }
 
-/* tilt sets in during decay */
 .tilt-a {
   transform: rotate(calc(clamp(0, var(--decay) - 0.6, 0.4) / 0.4 * -2.5deg));
 }
@@ -741,6 +759,118 @@ html[data-stage="decay"][data-critical="true"] .frag p {
 .tilt-b {
   transform: rotate(calc(clamp(0, var(--decay) - 0.66, 0.34) / 0.34 * 1.6deg));
   transform-origin: 20% 30%;
+}
+
+/* ---------- the collapse: every section falls on its own ---------- */
+
+html[data-stage="dying"] .masthead {
+  animation: collapse-a 2.6s cubic-bezier(0.5, 0.05, 0.8, 0.4) 0.8s forwards;
+}
+
+html[data-stage="dying"] .voice {
+  animation: collapse-b 2.8s cubic-bezier(0.5, 0.05, 0.8, 0.4) 1s forwards;
+}
+
+html[data-stage="dying"] .report {
+  animation: collapse-c 2.5s cubic-bezier(0.5, 0.05, 0.8, 0.4) 1.3s forwards;
+}
+
+html[data-stage="dying"] .arrangement {
+  animation: collapse-d 2.6s cubic-bezier(0.5, 0.05, 0.8, 0.4) 1.15s forwards;
+}
+
+html[data-stage="dying"] .ruler-wrap {
+  animation: collapse-e 2.4s cubic-bezier(0.5, 0.05, 0.8, 0.4) 1.5s forwards;
+}
+
+html[data-stage="dying"] .colophon {
+  animation: collapse-f 2.2s cubic-bezier(0.5, 0.05, 0.8, 0.4) 1.7s forwards;
+}
+
+@keyframes collapse-a {
+  0% {
+    translate: 0 0;
+    rotate: 0deg;
+    opacity: 1;
+  }
+  18% {
+    translate: 0 8px;
+  }
+  100% {
+    translate: -30px 52vh;
+    rotate: -5deg;
+    opacity: 0;
+    filter: blur(3px);
+  }
+}
+
+@keyframes collapse-b {
+  0% {
+    translate: 0 0;
+    rotate: 0deg;
+    opacity: 1;
+  }
+  15% {
+    translate: 0 10px;
+  }
+  100% {
+    translate: 24px 60vh;
+    rotate: 3deg;
+    opacity: 0;
+    filter: blur(4px);
+  }
+}
+
+@keyframes collapse-c {
+  0% {
+    translate: 0 0;
+    rotate: 0deg;
+    opacity: 1;
+  }
+  100% {
+    translate: -56px 44vh;
+    rotate: -7deg;
+    opacity: 0;
+    filter: blur(3px);
+  }
+}
+
+@keyframes collapse-d {
+  0% {
+    translate: 0 0;
+    opacity: 1;
+  }
+  100% {
+    translate: 64px 38vh;
+    rotate: 6deg;
+    opacity: 0;
+    filter: blur(3px);
+  }
+}
+
+@keyframes collapse-e {
+  0% {
+    translate: 0 0;
+    rotate: 0deg;
+    opacity: 1;
+  }
+  100% {
+    translate: 0 30vh;
+    rotate: -2deg;
+    opacity: 0;
+  }
+}
+
+@keyframes collapse-f {
+  0% {
+    translate: 0 0;
+    opacity: 1;
+  }
+  100% {
+    translate: 12px 24vh;
+    rotate: 1.5deg;
+    opacity: 0;
+  }
 }
 
 /* ---------- the ruler: shape of a life ---------- */
@@ -1167,7 +1297,7 @@ html[data-stage="dead"] .grain {
   opacity: 0.05;
 }
 
-/* cracks: three escalating systems, each with its own decay threshold. */
+/* cracks: three escalating systems during life. during death they deepen. */
 .cracks {
   position: fixed;
   inset: 0;
@@ -1208,7 +1338,6 @@ html[data-stage="dead"] .grain {
   opacity: calc(clamp(0, var(--decay) - 0.8, 0.2) / 0.2 * 0.95);
 }
 
-/* in the final seconds the web throbs. */
 html[data-stage="decay"][data-critical="true"] .cg-c {
   animation: crack-pulse 1.2s ease-in-out infinite;
 }
@@ -1223,6 +1352,26 @@ html[data-stage="decay"][data-critical="true"] .cg-c {
   }
 }
 
+/* dying: every crack gouges deeper before the pieces let go. */
+html[data-stage="dying"] .cracks {
+  mix-blend-mode: screen;
+  opacity: 0.55;
+}
+
+html[data-stage="dying"] .cracks path {
+  stroke: rgba(245, 239, 226, 0.45);
+  animation: deepen 2.4s ease-in forwards;
+}
+
+@keyframes deepen {
+  from {
+    stroke-width: 1;
+  }
+  to {
+    stroke-width: 3.5;
+  }
+}
+
 html[data-stage="dead"] .cracks {
   mix-blend-mode: screen;
   opacity: 0.12;
@@ -1234,7 +1383,6 @@ html[data-stage="dead"] .cracks path {
 
 /* ---------- the death event ---------- */
 
-/* the screen dies like a crt: blink, flicker, out. */
 .death-blink {
   position: fixed;
   inset: 0;
@@ -1281,14 +1429,15 @@ html[data-stage="dead"] .cracks path {
   }
 }
 
-/* the shatter web: snaps across the glass, then stays as a ghost. */
+/* the shatter web: draws in, holds while the shards fall, then fades
+   away with the body so the grave screen is clean. */
 .shatter {
   position: fixed;
   inset: 0;
   z-index: 70;
   pointer-events: none;
   opacity: 1;
-  animation: sh-settle 2.2s 0.6s ease forwards;
+  animation: sh-life 5.8s linear forwards;
 }
 
 .shatter svg {
@@ -1337,9 +1486,15 @@ html[data-stage="dead"] .cracks path {
   }
 }
 
-@keyframes sh-settle {
-  to {
-    opacity: 0.25;
+@keyframes sh-life {
+  0% {
+    opacity: 1;
+  }
+  65% {
+    opacity: 0.85;
+  }
+  100% {
+    opacity: 0;
   }
 }
 
@@ -1351,6 +1506,53 @@ html[data-stage="dead"] .cracks path {
   100% {
     opacity: 0;
     scale: 1.6;
+  }
+}
+
+/* falling debris: shards and dust. */
+.shards {
+  position: fixed;
+  inset: 0;
+  z-index: 75;
+  pointer-events: none;
+}
+
+.shards svg {
+  width: 100%;
+  height: 100%;
+}
+
+.shard {
+  fill: #17130e;
+  stroke: rgba(245, 239, 226, 0.3);
+  stroke-width: 1;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation-name: shard-fall;
+  animation-timing-function: cubic-bezier(0.45, 0.05, 0.85, 0.4);
+  animation-fill-mode: forwards;
+}
+
+.mote {
+  fill: rgba(245, 239, 226, 0.4);
+  transform-box: fill-box;
+  transform-origin: center;
+  animation-name: shard-fall;
+  animation-timing-function: cubic-bezier(0.45, 0.05, 0.85, 0.4);
+  animation-fill-mode: forwards;
+}
+
+@keyframes shard-fall {
+  0% {
+    transform: translate(0, 0) rotate(0deg);
+    opacity: 1;
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--dx, 0px), 1050px) rotate(var(--rot, 25deg));
+    opacity: 0;
   }
 }
 
@@ -1401,10 +1603,30 @@ html[data-stage="dead"] .cracks path {
   .columns,
   .cg-c,
   .wordmark-dot,
-  .death-blink,
-  .impact,
-  main.main-struck {
+  .cracks path {
     animation: none;
+  }
+
+  html[data-stage="dying"] main,
+  html[data-stage="dying"] .masthead,
+  html[data-stage="dying"] .voice,
+  html[data-stage="dying"] .report,
+  html[data-stage="dying"] .arrangement,
+  html[data-stage="dying"] .ruler-wrap,
+  html[data-stage="dying"] .colophon {
+    animation: none;
+  }
+
+  /* without motion there is no ceremony: a short fade, then the grave. */
+  html[data-stage="dying"] main {
+    opacity: 0;
+    transition: opacity 1.2s ease;
+  }
+
+  .shards,
+  .shatter,
+  .death-blink {
+    display: none;
   }
 
   .tilt-a,
@@ -1420,23 +1642,14 @@ html[data-stage="dead"] .cracks path {
     opacity: 0.5;
   }
 
-  html[data-stage="dead"] .ecg-flat {
+  html[data-stage="dead"] .ecg-flat,
+  html[data-stage="dying"] .ecg-flat {
     opacity: 0.5;
   }
 
   .flash-on {
     opacity: 0.6;
     transition: opacity 0.3s ease;
-  }
-
-  .shatter {
-    animation: none;
-    opacity: 0.25;
-  }
-
-  .shatter path {
-    animation: none;
-    stroke-dashoffset: 0;
   }
 }
 
