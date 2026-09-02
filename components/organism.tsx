@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Cracks } from "./cracks";
 import { Ecg } from "./ecg";
+import { Shatter } from "./shatter";
 import { Tombstone } from "./tombstone";
 import { Vitals } from "./vitals";
 import {
@@ -74,12 +75,45 @@ const STAGE_ANNOUNCE: Record<Stage, string> = {
 
 type DeadInfo = { born: number; died: number; cod: string };
 
+const CRITICAL_DECAY = 0.85;
+
 function applyDecay(d: number) {
   if (typeof document === "undefined") return;
   const clamped = Math.max(0, Math.min(1, d));
   const el = document.documentElement;
   el.style.setProperty("--decay", String(clamped));
   el.dataset.stage = stageOf(clamped);
+  el.dataset.critical = clamped >= CRITICAL_DECAY && clamped < 1 ? "true" : "false";
+}
+
+/* ---- words that die ---------------------------------------------- */
+/* every word gets a deterministic death threshold. as decay rises, more
+   words pass their threshold and go out — and they never come back. */
+
+function wordThreshold(word: string, index: number): number {
+  let h = 2166136261;
+  const s = `${index}:${word}`;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return ((h >>> 0) % 1000) / 1000;
+}
+
+function DyingText({ text, decay }: { text: string; decay: number }) {
+  const kill = Math.min(1, Math.max(0, (decay - 0.55) / 0.35)) * 0.85;
+  return (
+    <>
+      {text.split(" ").map((w, i) => {
+        const gone = kill > 0 && wordThreshold(w, i) < kill;
+        return (
+          <span key={i} className={gone ? "w w-dead" : "w"}>
+            {w}{" "}
+          </span>
+        );
+      })}
+    </>
+  );
 }
 
 export default function Organism() {
@@ -93,6 +127,7 @@ export default function Organism() {
   const [counts, setCounts] = useState({ deaths: 0, res: 0 });
   const [marks, setMarks] = useState<string[]>([]);
   const [flash, setFlash] = useState(false);
+  const [struck, setStruck] = useState(false);
   const [announce, setAnnounce] = useState("");
 
   const marksRef = useRef<string[]>([]);
@@ -196,6 +231,7 @@ export default function Organism() {
         setCounts((c) => ({ ...c, deaths }));
         setDead({ born: r.birth, died: diedAt, cod });
         setPhase("dead");
+        setStruck(true); // the death event: blink, convulsion, shatter.
         setAgeSec(LIFE_SPAN_MS / 1000);
         setPulse(0);
         setVitals(0);
@@ -255,8 +291,7 @@ export default function Organism() {
   }, []);
 
   useEffect(() => {
-    document.title =
-      phase === "dead" ? "rot — dead" : `rot — ${phase}`;
+    document.title = phase === "dead" ? "rot — dead" : `rot — ${phase}`;
   }, [phase]);
 
   const defibrillate = useCallback(() => {
@@ -276,6 +311,7 @@ export default function Organism() {
 
     setCounts((c) => ({ ...c, res }));
     setDead(null);
+    setStruck(false);
     setBornAt(now);
     setPhase("alive");
     setAgeSec(0);
@@ -296,6 +332,7 @@ export default function Organism() {
   }, []);
 
   const living = phase !== "dead";
+  const decayNow = (100 - vitals) / 100;
 
   return (
     <>
@@ -308,13 +345,19 @@ export default function Organism() {
         timeScale={timeScale}
       />
       <Cracks />
+      {phase === "dead" && <Shatter />}
+      {struck && (
+        <div className="death-blink" aria-hidden="true">
+          <span>signal lost</span>
+        </div>
+      )}
       <div className="grain" aria-hidden="true" />
       <div className={flash ? "flash flash-on" : "flash"} aria-hidden="true" />
       <p className="sr-only" role="status" aria-live="polite">
         {announce}
       </p>
 
-      <main>
+      <main className={struck ? "main-struck" : undefined}>
         <header className="masthead">
           <h1 className="wordmark">
             rot<span className="wordmark-dot">.</span>
@@ -346,7 +389,13 @@ export default function Organism() {
                     <span className="frag-i" aria-hidden="true">
                       {String(i + 1).padStart(2, "0")}
                     </span>
-                    <p>{t}</p>
+                    <p>
+                      {phase === "alive" ? (
+                        t
+                      ) : (
+                        <DyingText text={t} decay={decayNow} />
+                      )}
+                    </p>
                   </div>
                 ))}
               </div>
@@ -378,7 +427,10 @@ export default function Organism() {
               </aside>
             </section>
 
-            <section className="ruler-wrap tilt-b" aria-label="the shape of a life">
+            <section
+              className="ruler-wrap tilt-b"
+              aria-label="the shape of a life"
+            >
               <h2 className="kicker">the shape of a life</h2>
               <div className="ruler">
                 <div className="ruler-ticks" aria-hidden="true" />
